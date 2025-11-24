@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sangam/ Magnas</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</svg>
+    <style>
+        :root {
+            /* Color Palette */
+            --bg-color: #ffffff;
+            --strap-color: #b0b3b8; 
+            --case-color: #4a4a4a; 
+            --screen-black: #080808; 
+            --crown-gradient: linear-gradient(to right, #666, #ddd, #666);
+            
+            /* Clock Colors */
+            --hand-hour: #e0e0e0;
+            --hand-minute: #b0b0b0;
+            --hand-second: #ff4500; /* Tactical Orange */
+            --marker-color: #555;
+
+            /* App UI Colors */
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --accent-green: #32d74b;
+            --accent-red: #ff453a;
+            --accent-blue: #0a84ff;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            margin: 0;
+            font-family: 'SF Pro Display', 'Roboto', sans-serif;
+            user-select: none; /* Prevent text selection while interacting */
+        }
+
+        /* --- Watch Structure --- */
+        .watch-container {
+            position: relative;
+            width: 300px;
+            height: 500px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .strap {
+            position: absolute;
+            width: 160px;
+            height: 120px;
+            background-color: var(--strap-color);
+            background-image: repeating-linear-gradient(
+                -45deg, transparent, transparent 5px,
+                rgba(0, 0, 0, 0.08) 5px, rgba(0, 0, 0, 0.08) 10px
+            );
+            z-index: 1;
+        }
+        .strap.top { top: 0; border-radius: 20px 20px 0 0; box-shadow: inset 0 -15px 15px rgba(0,0,0,0.2); }
+        .strap.bottom { bottom: 0; border-radius: 0 0 20px 20px; box-shadow: inset 0 15px 15px rgba(0,0,0,0.2); }
+
+        .watch-case {
+            position: relative;
+            width: 260px;
+            height: 320px;
+            z-index: 2;
+            clip-path: polygon(15% 0, 85% 0, 100% 12%, 100% 88%, 85% 100%, 15% 100%, 0 88%, 0 12%);
+            background-color: var(--case-color);
+            background-image: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(0,0,0,0.3) 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+
+        .case-accent {
+            position: absolute;
+            top: 12%; left: 6%; width: 30px; height: 6px;
+            background-color: #222; transform: rotate(-45deg);
+            z-index: 4; border-radius: 2px;
+        }
+
+        /* --- Crown (Interactive) --- */
+        .crown {
+            position: absolute;
+            right: 10px; top: 50%;
+            transform: translateY(-50%);
+            width: 18px; height: 50px;
+            background: var(--crown-gradient);
+            border-radius: 4px;
+            z-index: 1; 
+            box-shadow: 4px 0 8px rgba(0,0,0,0.3);
+            cursor: ns-resize; /* Indicates scrolling capability */
+            transition: transform 0.1s;
+        }
+        .crown:active { transform: translateY(-50%) scale(0.95); }
+        .crown::after {
+            content: ''; position: absolute;
+            top: 5px; bottom: 5px; left: 2px; right: 2px;
+            background: repeating-linear-gradient(to bottom, transparent, transparent 2px, rgba(0,0,0,0.4) 3px, rgba(0,0,0,0.4) 4px);
+        }
+        .crown:hover::before {
+            content: 'Scroll';
+            position: absolute; left: 30px; top: 50%; transform: translateY(-50%);
+            background: #333; color: white; padding: 4px 8px; font-size: 10px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0.8;
+        }
+
+        /* --- Screen & Apps System --- */
+        .screen {
+            width: 86%; height: 88%;
+            background-color: var(--screen-black);
+            border-radius: 42px; 
+            z-index: 5;
+            position: relative;
+            background: radial-gradient(circle at 70% 30%, #2a2a2a 0%, #000000 60%);
+            box-shadow: inset 0 0 10px rgba(255,255,255,0.1);
+            border: 4px solid #1a1a1a; 
+            overflow: hidden;
+        }
+
+        .screen::after {
+            content: ''; position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(120deg, rgba(255,255,255,0.05) 0%, transparent 40%);
+            pointer-events: none; z-index: 100; border-radius: 38px;
+        }
+
+        /* App Containers */
+        .app-view {
+            position: absolute;
+            width: 100%; height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+
+        /* State Classes */
+        .app-view.active { opacity: 1; pointer-events: auto; transform: translateY(0); z-index: 20; }
+        .app-view.hidden-up { opacity: 0; transform: translateY(-100%); }
+        .app-view.hidden-down { opacity: 0; transform: translateY(100%); }
+
+        /* --- 1. Analog Clock Styles --- */
+        .clock-face { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        
+        .number-label {
+            position: absolute;
+            font-size: 1.5rem; /* Larger font size for prominence */
+            font-weight: 600;
+            color: #fff; /* White text for contrast */
+            text-shadow: 0 0 4px rgba(0,0,0,0.5); /* Slight shadow for depth */
+        }
+
+        .hands-container { position: absolute; width: 100%; height: 100%; z-index: 10; }
+        .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom center; border-radius: 4px 4px 0 0; box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+        .hand.hour { width: 8px; height: 25%; background-color: var(--hand-hour); margin-left: -4px; z-index: 2; }
+        .hand.minute { width: 6px; height: 38%; background-color: var(--hand-minute); margin-left: -3px; z-index: 3; }
+        .hand.second { width: 2px; height: 42%; background-color: var(--hand-second); margin-left: -1px; z-index: 4; }
+        .hand.second::after { content: ''; position: absolute; top: 100%; left: 0; width: 2px; height: 15px; background-color: var(--hand-second); }
+        .center-dot { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; background-color: #fff; border: 2px solid var(--hand-second); border-radius: 50%; transform: translate(-50%, -50%); z-index: 5; }
+        .markers { position: absolute; width: 100%; height: 100%; }
+        .marker { position: absolute; background-color: var(--marker-color); width: 4px; height: 10px; left: 50%; top: 50%; margin-left: -2px; margin-top: -5px; }
+        .marker.main { background-color: #fff; width: 6px; height: 14px; margin-left: -3px; margin-top: -7px; }
+
+        /* --- 2. Stopwatch Styles --- */
+        .stopwatch-app { background: #000; }
+        .stopwatch-display { font-size: 2.8rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 20px; }
+        .stopwatch-ms { font-size: 1.5rem; color: var(--text-secondary); }
+        .controls { display: flex; gap: 20px; }
+        .btn-round { width: 60px; height: 60px; border-radius: 50%; border: none; font-weight: 600; font-size: 0.8rem; color: white; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: center; align-items: center; transition: filter 0.2s; }
+        .btn-round:active { filter: brightness(0.8); }
+        .btn-start { background-color: rgba(50, 215, 75, 0.3); color: var(--accent-green); border: 2px solid var(--accent-green); }
+        .btn-start.running { background-color: rgba(255, 69, 58, 0.3); color: var(--accent-red); border: 2px solid var(--accent-red); }
+        .btn-reset { background-color: rgba(128, 128, 128, 0.3); color: white; border: 2px solid #888; }
+        .app-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; color: var(--accent-green); position: absolute; top: 30px; }
+
+        /* --- 3. Heart Rate Styles --- */
+        #app-heart { padding-top: 50px; box-sizing: border-box; }
+        .heart-icon { font-size: 3rem; color: var(--accent-red); animation: pulse 1s infinite; margin-bottom: 10px; }
+        .bpm-display { font-size: 3.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .bpm-label { font-size: 1rem; color: var(--accent-red); font-weight: 600; text-transform: uppercase; margin-top: -5px; }
+        .heart-graph { width: 80%; height: 40px; margin-top: 20px; background: repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(255, 69, 58, 0.2) 10px, rgba(255, 69, 58, 0.2) 12px); position: relative; }
+        .heart-graph::after { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: var(--accent-red); box-shadow: 0 0 10px var(--accent-red); }
+
+        /* --- 4. Digital Clock Styles (NEW) --- */
+        .weather-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            color: var(--accent-blue);
+        }
+        .weather-icon svg {
+            width: 35px;
+            height: 35px;
+            fill: currentColor;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .weather-temp {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .digital-time {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: white;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .digital-date {
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            font-weight: 500;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
+        }
+        .toggle-btn {
+            background: rgba(10, 132, 255, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .toggle-btn:hover {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            15% { transform: scale(1.15); opacity: 1; }
+            30% { transform: scale(1); opacity: 0.8; }
+            45% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="watch-container">
+        <div class="crown" id="crown"></div>
+
+        <div class="strap top"></div>
+        <div class="strap bottom"></div>
+
+        <div class="watch-case">
+            <div class="case-accent"></div>
+
+            <div class="screen">
+                
+                <!-- 0. STOPWATCH (Top of list) -->
+                <div class="app-view hidden-up" id="app-stopwatch">
+                    <div class="app-title">Stopwatch</div>
+                    <div class="stopwatch-display">
+                        <span id="sw-min">00</span>:<span id="sw-sec">00</span><span class="stopwatch-ms">.00</span>
+                    </div>
+                    <div class="controls">
+                        <button class="btn-round btn-reset" onclick="resetStopwatch()">Reset</button>
+                        <button class="btn-round btn-start" id="btn-start" onclick="toggleStopwatch()">Start</button>
+                    </div>
+                </div>
+
+                <!-- 1. ANALOG CLOCK (Default Center) -->
+                <div class="app-view active" id="app-clock">
+                    <div class="clock-face">
+                        <div class="markers" id="markers"></div>
+
+                        <!-- Number labels for 12, 3, 6, 9 -->
+                        <div class="number-label" style="top: 10%; left: 50%; transform: translateX(-50%);">12</div>
+                        <div class="number-label" style="top: 50%; right: 10%; transform: translateY(-50%);">3</div>
+                        <div class="number-label" style="bottom: 10%; left: 50%; transform: translateX(-50%);">6</div>
+                        <div class="number-label" style="top: 50%; left: 10%; transform: translateY(-50%);">9</div>
+
+                        <div class="hands-container">
+                            <div class="hand hour" id="hour-hand"></div>
+                            <div class="hand minute" id="minute-hand"></div>
+                            <div class="hand second" id="second-hand"></div>
+                        </div>
+                        <div class="center-dot"></div>
+                    </div>
+                </div>
+
+                <!-- 2. DIGITAL CLOCK (New - Below Analog) -->
+                <div class="app-view hidden-down" id="app-digital">
+                    <div class="weather-info">
+                        <div id="weather-icon-disp" class="weather-icon"></div>
+                        <div id="weather-temp-disp" class="weather-temp">--°C</div>
+                    </div>
+                    <div class="digital-time" id="digital-time-disp">12:00</div>
+                    <div class="digital-date" id="digital-date-disp">MON 01</div>
+                    <button class="toggle-btn" onclick="toggleFormat()" id="fmt-btn">12H Format</button>
+                </div>
+
+                <!-- 3. HEART RATE (Bottom of list) -->
+                <div class="app-view hidden-down" id="app-heart">
+                    <div class="app-title" style="color:var(--accent-red)">Heart Rate</div>
+                    <div class="heart-icon">❤️</div>
+                    <div class="bpm-display" id="bpm-val">--</div>
+                    <div class="bpm-label">BPM</div>
+                    <div class="heart-graph"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Ensure DOM is ready before accessing elements and attaching listeners
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- Shared/Global Variables ---
+        // Defined at top to prevent ReferenceErrors
+        let is24Hour = false;
+        const digTimeDisp = document.getElementById('digital-time-disp');
+        const digDateDisp = document.getElementById('digital-date-disp');
+        const fmtBtn = document.getElementById('fmt-btn');
+        
+        // Weather Variables
+        let currentTemp = 18; // Initial mock temperature
+        let currentWeatherCondition = 'Clear';
+        const weatherIconDisp = document.getElementById('weather-icon-disp');
+        const weatherTempDisp = document.getElementById('weather-temp-disp');
+
+
+        // --- Navigation Configuration ---
+        const appIds = ['app-stopwatch', 'app-clock', 'app-digital', 'app-heart'];
+        let currentIndex = 1; // Start at Analog Clock (index 1)
+        let isScrolling = false;
+
+        const crown = document.getElementById('crown');
+
+        // Update UI based on currentIndex
+        function updateAppView() {
+            appIds.forEach((id, index) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                // Remove all state classes first
+                el.classList.remove('active', 'hidden-up', 'hidden-down');
+                
+                if (index === currentIndex) {
+                    el.classList.add('active');
+                } else if (index < currentIndex) {
+                    el.classList.add('hidden-up'); // Apps above current
+                } else {
+                    el.classList.add('hidden-down'); // Apps below current
+                }
+            });
+        }
+
+        // Initialize view
+        updateAppView();
+
+        // Crown Scroll Logic (guard element and use non-passive listener so preventDefault works)
+        if (crown) {
+            crown.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (isScrolling) return;
+
+                if (e.deltaY < 0) {
+                    // Scroll UP -> Decrease Index
+                    if (currentIndex > 0) {
+                        currentIndex--;
+                        updateAppView();
+                        isScrolling = true;
+                    }
+                } else {
+                    // Scroll DOWN -> Increase Index
+                    if (currentIndex < appIds.length - 1) {
+                        currentIndex++;
+                        updateAppView();
+                        isScrolling = true;
+                    }
+                }
+
+                if (isScrolling) {
+                    setTimeout(() => { isScrolling = false; }, 400);
+                }
+            }, { passive: false });
+        }
+
+        // --- 1. Analog Clock Logic ---
+        const markersContainer = document.getElementById('markers');
+        const radius = 90;
+
+        if (markersContainer) {
+            for (let i = 0; i < 12; i++) {
+                const marker = document.createElement('div');
+                // The main markers (12, 3, 6, 9) are now visually replaced by the number labels,
+                // but we keep the other markers for visual balance.
+                marker.className = i % 3 === 0 ? 'marker main' : 'marker';
+                const angle = i * 30;
+                marker.style.transform = `rotate(${angle}deg) translateY(-${radius}px)`;
+                markersContainer.appendChild(marker);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const s = now.getSeconds();
+            const m = now.getMinutes();
+            const h = now.getHours();
+            
+            // Analog Update
+            const sDeg = (s / 60) * 360;
+            const mDeg = ((m / 60) * 360) + ((s/60)*6);
+            const hDeg = ((h / 12) * 360) + ((m/60)*30);
+
+            const secondHand = document.getElementById('second-hand');
+            const minuteHand = document.getElementById('minute-hand');
+            const hourHand = document.getElementById('hour-hand');
+
+            if (secondHand) secondHand.style.transform = `rotate(${sDeg}deg)`;
+            if (minuteHand) minuteHand.style.transform = `rotate(${mDeg}deg)`;
+            if (hourHand) hourHand.style.transform = `rotate(${hDeg}deg)`;
+
+            // Digital Update
+            updateDigitalClock(now);
+        }
+
+        // --- 2. Digital Clock Logic ---
+        function toggleFormat() {
+            is24Hour = !is24Hour;
+            if (fmtBtn) fmtBtn.textContent = is24Hour ? "24H Format" : "12H Format";
+            updateDigitalClock(new Date());
+        }
+
+        // expose toggleFormat to global if button uses inline onclick
+        window.toggleFormat = toggleFormat;
+
+        function getIcon(condition) {
+            // Simple inline SVG mapping for visual flair
+            switch (condition) {
+                case 'Clear':
+                    // Sun icon
+                    return '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+                case 'Clouds':
+                    // Cloud icon
+                    return '<svg viewBox="0 0 24 24"><path d="M17.5 18H5.5C2.56 18 0 15.44 0 12.5S2.56 7 5.5 7h.5c.34-1.74 1.77-3.13 3.5-3.5 1.94-.39 3.93.38 5.17 1.93l.33.45.5.07c2.25.32 4 2.22 4 4.5 0 2.5-.27 4.27-2.5 4.5H17.5z" fill="currentColor"/></svg>';
+                case 'Rain':
+                    // Cloud and rain drops
+                    return '<svg viewBox="0 0 24 24"><path d="M20 16.5c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0-3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2M15 16.5c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2M15 13.5c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2M19.35 10.04C18.67 6.59 15.64 4 12 4c-3.72 0-6.81 2.91-7 6.6C2.23 11.23 1 13.13 1 15c0 3.31 2.69 6 6 6h11c3.31 0 6-2.69 6-6 0-2.83-2.05-5.18-4.65-5.96z" fill="currentColor"/></svg>';
+                default:
+                    return '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'; 
+            }
+        }
+
+        function updateWeather(now) {
+            // Mock Weather Logic based on time of day for a more realistic feel
+            const hour = now.getHours();
+            
+            let tempRange;
+            let condition;
+            
+            if (hour >= 6 && hour < 18) {
+                // Day time: 6 AM to 6 PM
+                tempRange = { min: 20, max: 25 };
+                condition = 'Clear';
+            } else {
+                // Night time: 6 PM to 6 AM
+                tempRange = { min: 14, max: 18 };
+                condition = 'Clouds';
+            }
+
+            // Simple random temperature within the range
+            currentTemp = Math.floor(Math.random() * (tempRange.max - tempRange.min + 1)) + tempRange.min;
+            currentWeatherCondition = condition;
+
+            // Apply updates to the UI elements
+            if (weatherTempDisp) weatherTempDisp.textContent = `${currentTemp}°C`;
+            if (weatherIconDisp) weatherIconDisp.innerHTML = getIcon(currentWeatherCondition);
+        }
+
+        function updateDigitalClock(now) {
+            let h = now.getHours();
+            const m = String(now.getMinutes()).padStart(2, '0');
+            
+            if (!is24Hour) {
+                // Keep AM/PM if desired in future; currently no suffix to avoid layout shift.
+                h = h % 12;
+                h = h ? h : 12; // the hour '0' should be '12'
+            }
+            const hStr = String(h).padStart(2, '0');
+            if (digTimeDisp) digTimeDisp.textContent = `${hStr}:${m}`;
+
+            // Date
+            const options = { weekday: 'short', day: 'numeric', month: 'short' };
+            if (digDateDisp) digDateDisp.textContent = now.toLocaleDateString('en-US', options).toUpperCase();
+
+            // Weather Update (runs every second for smoothness, but logic only changes minute/hour)
+            updateWeather(now);
+        }
+
+        // --- 3. Stopwatch Logic ---
+        let swInterval;
+        let swTime = 0;
+        let swRunning = false;
+        const swMin = document.getElementById('sw-min');
+        const swSec = document.getElementById('sw-sec');
+        const swMs = document.querySelector('.stopwatch-ms');
+        const btnStart = document.getElementById('btn-start');
+
+        function toggleStopwatch() {
+            if (!btnStart) return;
+            if (swRunning) {
+                clearInterval(swInterval);
+                swRunning = false;
+                btnStart.textContent = "Start";
+                btnStart.classList.remove('running');
+            } else {
+                const startTime = Date.now() - swTime;
+                swInterval = setInterval(() => {
+                    swTime = Date.now() - startTime;
+                    updateStopwatchDisplay();
+                }, 10);
+                swRunning = true;
+                btnStart.textContent = "Stop";
+                btnStart.classList.add('running');
+            }
+        }
+
+        // expose reset/toggle handlers used by inline onclick attributes
+        window.toggleStopwatch = toggleStopwatch;
+
+        function resetStopwatch() {
+            clearInterval(swInterval);
+            swRunning = false;
+            swTime = 0;
+            updateStopwatchDisplay();
+            if (btnStart) {
+                btnStart.textContent = "Start";
+                btnStart.classList.remove('running');
+            }
+        }
+
+        window.resetStopwatch = resetStopwatch;
+
+        function updateStopwatchDisplay() {
+            const totalSec = Math.floor(swTime / 1000);
+            const min = Math.floor(totalSec / 60);
+            const sec = totalSec % 60;
+            const ms = Math.floor((swTime % 1000) / 10);
+
+            if (swMin) swMin.textContent = String(min).padStart(2, '0');
+            if (swSec) swSec.textContent = String(sec).padStart(2, '0');
+            if (swMs) swMs.textContent = '.' + String(ms).padStart(2, '0');
+        }
+
+        // --- 4. Heart Rate Logic ---
+        const bpmDisplay = document.getElementById('bpm-val');
+        setInterval(() => {
+            if (currentIndex === 3 && bpmDisplay) { // Only update if Heart Rate app is active
+                const randomBPM = Math.floor(Math.random() * (78 - 68 + 1) + 68);
+                bpmDisplay.textContent = randomBPM;
+            }
+        }, 2000);
+
+        // --- INITIALIZE CLOCK LOOP ---
+        setInterval(updateClock, 1000);
+        updateClock(); // Initial call to set time/weather immediately
+    });
+    </script>
+</body>
+</html>
